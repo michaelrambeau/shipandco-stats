@@ -1,38 +1,14 @@
-require('dotenv').load()
-const mongoose = require('mongoose')
-mongoose.Promise = require('bluebird')
-const Shipment = require('./ShipmentModel')
+const runQuery = require('./helpers/runQuery')
+const argv = require('minimist')(process.argv.slice(2))
+const params = argv._
+const query = params[0]
+const dbParam = argv.db
+const dbEnv = dbParam ? dbParam.toUpperCase() : 'SANDBOX'
+if (!query) throw new Error('Specify the query to run!')
 
-const url = process.env.MONGO_URL_STAGING
-mongoose.connect(url)
-console.log('Connect to', url)
+console.log('Query', query)
+const options = require(`./queries/${query}`)
+const { steps, processData } = options
+const filename = `${query}.json`
 
-const $project = {
-  'userId': 1,
-  'shipment_infos.carrier': 1
-}
-const $group = {
-  _id: {
-    'user': '$userId',
-    'carrier': '$shipment_infos.carrier'
-  },
-  count: { $sum: 1 }
-}
-const $sort = {
-  count: -1
-}
-
-const req = Shipment.aggregate()
-req.append({ $project })
-req.append({ $group })
-req.append({ $sort })
-
-const t0 = new Date()
-console.log('Searching...')
-req.exec().then((res, err) => {
-  const duration = (new Date() - t0) / 1000
-  if (err) return console.error(err)
-  console.log('THE END', res)
-  console.log('Duration', duration.toFixed(1), 'seconds')
-  mongoose.disconnect()
-})
+runQuery(steps, processData, filename, dbEnv)
